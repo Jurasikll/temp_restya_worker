@@ -200,6 +200,7 @@ func get_token() string {
 	if DEBUG {
 		fmt.Println(access_token)
 	}
+
 	temp_url = fmt.Sprintf(RESTYA_API_URL_GET_LOGIN_TOKEN, RESTYA_API_DOMAIN, access_token)
 	resp, _ = client.Post(temp_url, "application/json", strings.NewReader(JSON_BODY_REQ_TOKEN))
 
