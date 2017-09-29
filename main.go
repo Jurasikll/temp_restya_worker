@@ -26,6 +26,9 @@ const (
 	//RESTYA_API_DOMAIN token
 	RESTYA_API_URL_GET_LOGIN_TOKEN string = "%s/v1/users/login.json?token=%s"
 
+	//RESTYA_API_DOMAIN board_id token search_name
+	RESTYA_API_URL_GET_SEARCH_CARD string = "%s/v1/boards/%d/cards/search.json?token=%s&name=%s"
+
 	//RESTYA_API_DOMAIN board_id list_id token
 	RESTYA_API_URL_POST_CREATE_CARD string = "%s/v1/boards/%d/lists/%d/cards.json?token=%s"
 
@@ -34,6 +37,9 @@ const (
 
 	//RESTYA_API_DOMAIN board_id list_id card_id token
 	RESTYA_API_URL_POST_ADD_COMMENT_TO_CARD string = "%s/v1/boards/%d/lists/%d/cards/%s/comments.json?token=%s"
+
+	//RESTYA_API_DOMAIN board_id list_id card_id token
+	RESTYA_API_URL_POST_СOPY_CARD string = "%s/v1/boards/%d/lists/%d/cards/%s/copy.json?token=%s"
 
 	//RESTYA_API_DOMAIN board_id list_id card_id user_id token
 	RESTYA_API_URL_POST_ADD_MEMBER_TO_CARD string = "%s/v1/boards/%d/lists/%d/cards/%s/users/%d.json?token=%s"
@@ -46,6 +52,7 @@ type settings struct {
 	Ticket_folder_path string   `toml:"ticket_folder_path"`
 	Api_data           api_data `toml:"api_data"`
 	Board              board
+	Test_string        string
 }
 
 type api_data struct {
@@ -121,6 +128,16 @@ func check_ticket() {
 		}
 
 	}
+}
+
+func test_search() {
+	token = get_token()
+	url := fmt.Sprintf(RESTYA_API_URL_GET_SEARCH_CARD, set.Api_data.Restya_api_domain, set.Board.Id, token, set.Test_string)
+	fmt.Println(url)
+	resp, _ := client.Get()
+	buf = new(bytes.Buffer)
+	buf.ReadFrom(resp.Body)
+	fmt.Println(buf.String())
 }
 
 func create_card(title string, description string, label string, user_id int) {
