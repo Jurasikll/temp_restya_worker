@@ -59,7 +59,7 @@ type api_user struct {
 }
 
 type board struct {
-	Board_id          int
+	Id                int
 	Sd_baclog_list_id int
 	Members           map[string]member
 }
@@ -97,7 +97,7 @@ func main() {
 }
 
 func check_ticket() {
-	files, _ = filepath.Glob(TICKET_FOLDER_PATH)
+	files, _ = filepath.Glob(set.Ticket_folder_path)
 
 	if len(files) != 0 {
 		token = get_token()
@@ -136,8 +136,8 @@ func create_card(title string, description string, label string, user_id int) {
 	var objmap map[string]*json.RawMessage
 	var buf *bytes.Buffer
 
-	temp_body = fmt.Sprintf(JSON_BODY_PTR_ADD_CARD, BOARD_ID, SD_BACLOG_LIST_ID, title)
-	url := fmt.Sprintf(RESTYA_API_URL_POST_CREATE_CARD, RESTYA_API_DOMAIN, BOARD_ID, SD_BACLOG_LIST_ID, token)
+	temp_body = fmt.Sprintf(JSON_BODY_PTR_ADD_CARD, set.Board.Id, set.Board.Sd_baclog_list_id, title)
+	url := fmt.Sprintf(RESTYA_API_URL_POST_CREATE_CARD, set.Api_data.Restya_api_domain, set.Board.Id, set.Board.Sd_baclog_list_id, token)
 
 	resp, _ := client.Post(url, "application/json", strings.NewReader(temp_body))
 	buf = new(bytes.Buffer)
@@ -152,14 +152,14 @@ func create_card(title string, description string, label string, user_id int) {
 	buf.Reset()
 	if label != "" {
 		temp_body = fmt.Sprintf(JSON_BODY_PTR_ADD_LABEL, label)
-		url = fmt.Sprintf(RESTYA_API_URL_POST_ADD_LABEL_TO_CARD, RESTYA_API_DOMAIN, BOARD_ID, SD_BACLOG_LIST_ID, card_id, token)
+		url = fmt.Sprintf(RESTYA_API_URL_POST_ADD_LABEL_TO_CARD, set.Api_data.Restya_api_domain, set.Board.Id, set.Board.Sd_baclog_list_id, card_id, token)
 		client.Post(url, "application/json", strings.NewReader(temp_body))
 	}
 	if description != "" {
 		description = strings.Replace(description, "\r\n", " ", -1)
 		description = strings.Replace(description, `"`, `'`, -1)
 		temp_body = fmt.Sprintf(JSON_BODY_PTR_ADD_DESCRIPTION, description)
-		url = fmt.Sprintf(RESTYA_API_URL_PUT_ADD_ACTIONS_TO_CARD, RESTYA_API_DOMAIN, BOARD_ID, SD_BACLOG_LIST_ID, card_id, token)
+		url = fmt.Sprintf(RESTYA_API_URL_PUT_ADD_ACTIONS_TO_CARD, set.Api_data.Restya_api_domain, set.Board.Id, set.Board.Sd_baclog_list_id, card_id, token)
 		req, _ := http.NewRequest("PUT", url, strings.NewReader(temp_body))
 		req.Header.Set("Content-Type", "application/json")
 		fmt.Println(url)
@@ -167,7 +167,7 @@ func create_card(title string, description string, label string, user_id int) {
 	}
 	if user_id != 0 {
 		temp_body = fmt.Sprintf(JSON_BODY_PTR_ADD_MEMBER, card_id, user_id)
-		url = fmt.Sprintf(RESTYA_API_URL_POST_ADD_MEMBER_TO_CARD, RESTYA_API_DOMAIN, BOARD_ID, SD_BACLOG_LIST_ID, card_id, user_id, token)
+		url = fmt.Sprintf(RESTYA_API_URL_POST_ADD_MEMBER_TO_CARD, set.Api_data.Restya_api_domain, set.Board.Id, set.Board.Sd_baclog_list_id, card_id, user_id, token)
 		resp, _ = client.Post(url, "application/json", strings.NewReader(temp_body))
 		buf.ReadFrom(resp.Body)
 		if DEBUG {
@@ -179,7 +179,7 @@ func create_card(title string, description string, label string, user_id int) {
 
 func get_token() string {
 
-	const JSON_BODY_REQ_TOKEN string = `{"email": "` + USER_WORK + `","password": "` + PWD_WORK + `"}`
+	var JSON_BODY_REQ_TOKEN string = `{"email": "` + set.Api_data.Api_user.Login + `","password": "` + set.Api_data.Api_user.Password + `"}`
 
 	var access_token string = ""
 	var objmap map[string]*json.RawMessage
@@ -187,7 +187,7 @@ func get_token() string {
 	var resp *http.Response
 	var temp_url string
 
-	temp_url = fmt.Sprintf(RESTYA_API_URL_GET_OAUTH_TOKEN, RESTYA_API_DOMAIN)
+	temp_url = fmt.Sprintf(RESTYA_API_URL_GET_OAUTH_TOKEN, set.Api_data.Restya_api_domain)
 	resp, _ = client.Get(temp_url)
 	buf := new(bytes.Buffer)
 	buf.ReadFrom(resp.Body)
@@ -201,7 +201,7 @@ func get_token() string {
 		fmt.Println(access_token)
 	}
 
-	temp_url = fmt.Sprintf(RESTYA_API_URL_GET_LOGIN_TOKEN, RESTYA_API_DOMAIN, access_token)
+	temp_url = fmt.Sprintf(RESTYA_API_URL_GET_LOGIN_TOKEN, set.Api_data.Restya_api_domain, access_token)
 	resp, _ = client.Post(temp_url, "application/json", strings.NewReader(JSON_BODY_REQ_TOKEN))
 
 	buf.ReadFrom(resp.Body)
