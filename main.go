@@ -20,28 +20,27 @@ import (
 const (
 	DEBUG              = false
 	CONFIG_PATH string = `C:\goplace\src\config\temp_restya_worker\conf.ini`
+	//RESTYA_API_DOMAIN
+	RESTYA_API_URL_GET_OAUTH_TOKEN string = "%s/v1/oauth.json?scope=write"
+
+	//RESTYA_API_DOMAIN token
+	RESTYA_API_URL_GET_LOGIN_TOKEN string = "%s/v1/users/login.json?token=%s"
+
+	//RESTYA_API_DOMAIN board_id list_id token
+	RESTYA_API_URL_POST_CREATE_CARD string = "%s/v1/boards/%d/lists/%d/cards.json?token=%s"
+
+	//RESTYA_API_DOMAIN board_id list_id card_id token
+	RESTYA_API_URL_POST_ADD_LABEL_TO_CARD string = "%s/v1/boards/%d/lists/%d/cards/%s/labels.json?token=%s"
+
+	//RESTYA_API_DOMAIN board_id list_id card_id token
+	RESTYA_API_URL_POST_ADD_COMMENT_TO_CARD string = "%s/v1/boards/%d/lists/%d/cards/%s/comments.json?token=%s"
+
+	//RESTYA_API_DOMAIN board_id list_id card_id user_id token
+	RESTYA_API_URL_POST_ADD_MEMBER_TO_CARD string = "%s/v1/boards/%d/lists/%d/cards/%s/users/%d.json?token=%s"
+
+	//RESTYA_API_DOMAIN board_id list_id card_id token
+	RESTYA_API_URL_PUT_ADD_ACTIONS_TO_CARD string = "%s/v1/boards/%d/lists/%d/cards/%s.json?token=%s"
 )
-
-//RESTYA_API_DOMAIN
-const RESTYA_API_URL_GET_OAUTH_TOKEN string = "%s/v1/oauth.json?scope=write"
-
-//RESTYA_API_DOMAIN token
-const RESTYA_API_URL_GET_LOGIN_TOKEN string = "%s/v1/users/login.json?token=%s"
-
-//RESTYA_API_DOMAIN board_id list_id token
-const RESTYA_API_URL_POST_CREATE_CARD string = "%s/v1/boards/%d/lists/%d/cards.json?token=%s"
-
-//RESTYA_API_DOMAIN board_id list_id card_id token
-const RESTYA_API_URL_POST_ADD_LABEL_TO_CARD string = "%s/v1/boards/%d/lists/%d/cards/%s/labels.json?token=%s"
-
-//RESTYA_API_DOMAIN board_id list_id card_id token
-const RESTYA_API_URL_POST_ADD_COMMENT_TO_CARD string = "%s/v1/boards/%d/lists/%d/cards/%s/comments.json?token=%s"
-
-//RESTYA_API_DOMAIN board_id list_id card_id user_id token
-const RESTYA_API_URL_POST_ADD_MEMBER_TO_CARD string = "%s/v1/boards/%d/lists/%d/cards/%s/users/%d.json?token=%s"
-
-//RESTYA_API_DOMAIN board_id list_id card_id token
-const RESTYA_API_URL_PUT_ADD_ACTIONS_TO_CARD string = "%s/v1/boards/%d/lists/%d/cards/%s.json?token=%s"
 
 type settings struct {
 	Ticket_folder_path string   `toml:"ticket_folder_path"`
@@ -69,7 +68,6 @@ type member struct {
 
 var client *http.Client = &http.Client{}
 var token string
-var member_list map[string]int
 var temp_user int = 0
 var temp_title string
 var temp_title_data []string
@@ -82,7 +80,6 @@ var dec *encoding.Decoder
 var set settings
 
 func start_load_ticket() {
-	member_list = make(map[string]int)
 
 	dec = charmap.Windows1251.NewDecoder()
 	for true {
@@ -93,7 +90,7 @@ func start_load_ticket() {
 
 func main() {
 	toml.DecodeFile(CONFIG_PATH, &set)
-	fmt.Printf("%v\n", set)
+	start_load_ticket()
 }
 
 func check_ticket() {
@@ -114,7 +111,7 @@ func check_ticket() {
 				}
 				if strings.Contains(val, "@") {
 					temp_title = strings.Replace(temp_title, val, "", -1)
-					temp_user = member_list[val]
+					temp_user = set.Board.Members[val].Id
 				}
 
 			}
