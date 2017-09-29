@@ -97,7 +97,7 @@ func start_load_ticket() {
 
 func main() {
 	toml.DecodeFile(CONFIG_PATH, &set)
-	start_load_ticket()
+	test_search()
 }
 
 func check_ticket() {
@@ -131,10 +131,11 @@ func check_ticket() {
 }
 
 func test_search() {
+	var buf *bytes.Buffer
 	token = get_token()
 	url := fmt.Sprintf(RESTYA_API_URL_GET_SEARCH_CARD, set.Api_data.Restya_api_domain, set.Board.Id, token, set.Test_string)
 	fmt.Println(url)
-	resp, _ := client.Get()
+	resp, _ := client.Get(url)
 	buf = new(bytes.Buffer)
 	buf.ReadFrom(resp.Body)
 	fmt.Println(buf.String())
