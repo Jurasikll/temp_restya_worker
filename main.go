@@ -27,7 +27,7 @@ const (
 	RESTYA_API_URL_GET_LOGIN_TOKEN string = "%s/v1/users/login.json?token=%s"
 
 	//RESTYA_API_DOMAIN board_id token search_name
-	RESTYA_API_URL_GET_SEARCH_CARD string = "%s/v1/boards/%d/cards/search.json?token=%s&name=%s"
+	RESTYA_API_URL_GET_SEARCH_CARD string = "%s/v1/boards/%d/cards/search.json?token=%s&q=%s"
 
 	//RESTYA_API_DOMAIN board_id list_id token
 	RESTYA_API_URL_POST_CREATE_CARD string = "%s/v1/boards/%d/lists/%d/cards.json?token=%s"
@@ -73,6 +73,16 @@ type member struct {
 	Id int
 }
 
+//type find_cards struct {
+//
+//}
+
+type restya_card struct {
+	Id       int
+	Name     string
+	Board_id int
+}
+
 var client *http.Client = &http.Client{}
 var token string
 var temp_user int = 0
@@ -97,7 +107,19 @@ func start_load_ticket() {
 
 func main() {
 	toml.DecodeFile(CONFIG_PATH, &set)
-	test_search()
+	var newest_restya_card restya_card
+	find_cards := restya_cards_search(set.Test_string)
+	for _, card := range find_cards {
+		if card.Id > newest_restya_card.Id {
+			newest_restya_card = card
+		}
+	}
+	newest_restya_card.copy()
+}
+
+func (c *restya_card) copy() {
+
+	fmt.Printf("%v\n", c)
 }
 
 func check_ticket() {
@@ -130,15 +152,23 @@ func check_ticket() {
 	}
 }
 
-func test_search() {
-	var buf *bytes.Buffer
+func restya_cards_search(search_str string) []restya_card {
+	var result, find_res []restya_card
 	token = get_token()
-	url := fmt.Sprintf(RESTYA_API_URL_GET_SEARCH_CARD, set.Api_data.Restya_api_domain, set.Board.Id, token, set.Test_string)
+	url := fmt.Sprintf(RESTYA_API_URL_GET_SEARCH_CARD, set.Api_data.Restya_api_domain, set.Board.Id, token, search_str)
 	fmt.Println(url)
 	resp, _ := client.Get(url)
-	buf = new(bytes.Buffer)
-	buf.ReadFrom(resp.Body)
-	fmt.Println(buf.String())
+	body, _ := ioutil.ReadAll(resp.Body)
+	json.Unmarshal(body, &find_res)
+	for _, card := range find_res {
+		if card.Board_id == set.Board.Id {
+			result = append(result, card)
+		}
+
+		//		fmt.Printf("Board - %d Name - %s\n", card.Board_id, card.Name)
+	}
+
+	return result
 }
 
 func create_card(title string, description string, label string, user_id int) {
