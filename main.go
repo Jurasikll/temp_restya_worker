@@ -39,13 +39,16 @@ const (
 	RESTYA_API_URL_POST_ADD_COMMENT_TO_CARD string = "%s/v1/boards/%d/lists/%d/cards/%s/comments.json?token=%s"
 
 	//RESTYA_API_DOMAIN board_id list_id card_id token
-	RESTYA_API_URL_POST_СOPY_CARD string = "%s/v1/boards/%d/lists/%d/cards/%s/copy.json?token=%s"
+	RESTYA_API_URL_POST_СOPY_CARD string = "%s/v1/boards/%d/lists/%d/cards/%d/copy.json?token=%s"
 
 	//RESTYA_API_DOMAIN board_id list_id card_id user_id token
 	RESTYA_API_URL_POST_ADD_MEMBER_TO_CARD string = "%s/v1/boards/%d/lists/%d/cards/%s/users/%d.json?token=%s"
 
 	//RESTYA_API_DOMAIN board_id list_id card_id token
 	RESTYA_API_URL_PUT_ADD_ACTIONS_TO_CARD string = "%s/v1/boards/%d/lists/%d/cards/%s.json?token=%s"
+
+	//RESTYA_API_DOMAIN board_id list_id card_id token
+	RESTYA_API_URL_PUT_MOVE_CARD_TO_LIST string = "%s/v1/boards/%d/lists/{listId}/cards.json?token=%s"
 )
 
 type settings struct {
@@ -118,8 +121,29 @@ func main() {
 }
 
 func (c *restya_card) copy() {
+	var buf *bytes.Buffer
+	token = get_token()
+	url := fmt.Sprintf(RESTYA_API_URL_POST_СOPY_CARD, set.Api_data.Restya_api_domain, set.Board.Id, set.Board.Sd_baclog_list_id, c.Id, token)
 
-	fmt.Printf("%v\n", c)
+	body := `{
+			  "copied_card_id": %d,
+			  "keep_activities": "1",
+			  "keep_attachments": "1",
+			  "keep_checklists": "1",
+			  "keep_labels": "1",
+			  "keep_users": "1",
+			  "position":"1",
+			  "is_archived": false,
+			  "list_id":"%d",
+			  "name": "%s"
+			}`
+
+	body = fmt.Sprintf(body, c.Id, set.Board.Sd_baclog_list_id, c.Name)
+	fmt.Println(body)
+	resp, _ := client.Post(url, "application/json", strings.NewReader(body))
+	buf = new(bytes.Buffer)
+	buf.ReadFrom(resp.Body)
+	fmt.Printf("%s\n", buf.String())
 }
 
 func check_ticket() {
