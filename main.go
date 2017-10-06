@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -110,35 +111,29 @@ func start_load_ticket() {
 
 func main() {
 	toml.DecodeFile(CONFIG_PATH, &set)
-	var newest_restya_card restya_card
-	find_cards := restya_cards_search(set.Test_string)
-	for _, card := range find_cards {
-		if card.Id > newest_restya_card.Id {
-			newest_restya_card = card
-		}
-	}
-	newest_restya_card.copy()
+	start_load_ticket()
+
 }
 
-func (c *restya_card) copy() {
+func (c *restya_card) copy(card_tittle string) {
+	const BODY_PTR_FOR_COPY_CARD string = `{
+											  "copied_card_id": %d,
+											  "keep_activities": "1",
+											  "keep_attachments": "1",
+											  "keep_checklists": "1",
+											  "keep_labels": "1",
+											  "keep_users": "1",
+											  "position":"1",
+											  "is_archived": false,
+											  "list_id":"%d",
+											  "name": "%s"
+											}`
+
 	var buf *bytes.Buffer
 	token = get_token()
 	url := fmt.Sprintf(RESTYA_API_URL_POST_СOPY_CARD, set.Api_data.Restya_api_domain, set.Board.Id, set.Board.Sd_baclog_list_id, c.Id, token)
 
-	body := `{
-			  "copied_card_id": %d,
-			  "keep_activities": "1",
-			  "keep_attachments": "1",
-			  "keep_checklists": "1",
-			  "keep_labels": "1",
-			  "keep_users": "1",
-			  "position":"1",
-			  "is_archived": false,
-			  "list_id":"%d",
-			  "name": "%s"
-			}`
-
-	body = fmt.Sprintf(body, c.Id, set.Board.Sd_baclog_list_id, c.Name)
+	body := fmt.Sprintf(BODY_PTR_FOR_COPY_CARD, c.Id, set.Board.Sd_baclog_list_id, card_tittle)
 	fmt.Println(body)
 	resp, _ := client.Post(url, "application/json", strings.NewReader(body))
 	buf = new(bytes.Buffer)
@@ -148,6 +143,7 @@ func (c *restya_card) copy() {
 
 func check_ticket() {
 	files, _ = filepath.Glob(set.Ticket_folder_path)
+	is_new := true
 
 	if len(files) != 0 {
 		token = get_token()
@@ -165,11 +161,26 @@ func check_ticket() {
 				if strings.Contains(val, "@") {
 					temp_title = strings.Replace(temp_title, val, "", -1)
 					temp_user = set.Board.Members[val].Id
+					is_new = false
 				}
 
 			}
 			os.Remove(file_path)
-			create_card(temp_title, strings.Replace(string(dat), "\t", " ", -1), "BPM", temp_user)
+			if is_new {
+				create_card(temp_title, strings.Replace(string(dat), "\t", " ", -1), "BPM", temp_user)
+			} else {
+				const SERVICE_DESCK_IDS_PTR string = "(SR[0-9]{8}|TT[0-9]{7})"
+				var newest_restya_card restya_card
+				re := regexp.MustCompile(SERVICE_DESCK_IDS_PTR)
+				find_cards := restya_cards_search(re.FindAllString(temp_title, -1)[0])
+
+				for _, card := range find_cards {
+					if card.Id > newest_restya_card.Id {
+						newest_restya_card = card
+					}
+				}
+				newest_restya_card.copy(temp_title)
+			}
 
 		}
 
