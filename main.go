@@ -173,6 +173,12 @@ func cron_arch_list(lists []string, esc int) {
 	}
 }
 
+func reopen_card(card_id int, list_id int) {
+	toml.DecodeFile(CONFIG_PATH, &set)
+	ra := mym.R_api{Debug: DEBUG, U_login: set.Api_data.Api_user.Login, U_pwd: set.Api_data.Api_user.Password, Api_domain: set.Api_data.Restya_api_domain, Board_id: set.Board.Id, Client: &http.Client{}}
+	ra.Un_arch_card(list_id, card_id)
+}
+
 func start_cron() {
 
 	var c *cron.Cron = cron.New()
