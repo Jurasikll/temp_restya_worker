@@ -201,6 +201,14 @@ func start_cron() {
 
 func main() {
 	start_cron()
+	//	un_arch_card()
+}
+
+func un_arch_card() {
+	dec = charmap.Windows1251.NewDecoder()
+	toml.DecodeFile(CONFIG_PATH, &set)
+	m := mym.R_api{Debug: DEBUG, U_login: set.Api_data.Api_user.Login, U_pwd: set.Api_data.Api_user.Password, Api_domain: set.Api_data.Restya_api_domain, Board_id: set.Board.Id, Client: &http.Client{}}
+	m.Un_arch_card(418, 4271)
 }
 
 func check_is_new_cron() (string, bool) {
