@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	tc "tfs_client/client"
 
 	cron "gopkg.in/robfig/cron.v2"
 
@@ -70,9 +71,18 @@ const (
 type settings struct {
 	Ticket_folder_path string   `toml:"ticket_folder_path"`
 	Api_data           api_data `toml:"api_data"`
+	Tfs_data           tfs_data `toml:"tfs_data"`
 	Board              board
 	Test_string        string
 	Path_to_ref        string
+}
+
+type tfs_data struct {
+	User        string
+	Pwd         string
+	Domain      string
+	Protocol    string
+	Api_version string
 }
 
 type api_data struct {
@@ -92,6 +102,7 @@ type board struct {
 type member struct {
 	Id           int
 	Outlook_name string
+	Tfs_name     string
 }
 
 type restya_card struct {
@@ -127,6 +138,7 @@ var dec *encoding.Decoder
 var set settings
 var cron_body_md5 string = ""
 var func_map map[string]func(map[string]string)
+var tfs_client tc.TFS_api_client
 
 func start_load_ticket() {
 
@@ -187,6 +199,11 @@ func start_cron() {
 
 	dec = charmap.Windows1251.NewDecoder()
 	toml.DecodeFile(CONFIG_PATH, &set)
+	tfs_client = tc.TFS_api_client{Login: set.Tfs_data.User,
+		Pwd:         set.Tfs_data.Pwd,
+		Domain:      set.Tfs_data.Domain,
+		Protocol:    set.Tfs_data.Protocol,
+		Api_version: set.Tfs_data.Api_version}
 	c.Start()
 	for true {
 		time.Sleep(time.Second * 1)
@@ -202,13 +219,109 @@ func start_cron() {
 func main() {
 	start_cron()
 	//	un_arch_card()
+	//	copy_restya_list()
+}
+
+func copy_restya_list() {
+	dec = charmap.Windows1251.NewDecoder()
+	toml.DecodeFile(CONFIG_PATH, &set)
+	ra := mym.R_api{Debug: DEBUG, U_login: set.Api_data.Api_user.Login, U_pwd: set.Api_data.Api_user.Password, Api_domain: set.Api_data.Restya_api_domain, Board_id: set.Board.Id, Client: &http.Client{}}
+	tfs_client = tc.TFS_api_client{Login: set.Tfs_data.User,
+		Pwd:         set.Tfs_data.Pwd,
+		Domain:      set.Tfs_data.Domain,
+		Protocol:    set.Tfs_data.Protocol,
+		Api_version: set.Tfs_data.Api_version}
+	cards := ra.Get_no_arch_cards_from_list(420)
+	for _, card := range cards {
+		tfs_add_ticket(card)
+	}
+}
+
+func tfs_add_ticket(card mym.R_card) {
+	var card_params []tc.TFS_req_struct
+	var temp_state string
+	var temp_substate string
+	temp_tfs_user_name := tc.TFS_STANDART_TFS_USER
+	card_params = append(card_params, tc.TFS_req_struct{
+		Action: tc.TFS_ACTIONS_ADD,
+		Field:  tc.TFS_FIELDS_TITLE,
+		From:   nil,
+		Value:  card.Name})
+	card_params = append(card_params, tc.TFS_req_struct{
+		Action: tc.TFS_ACTIONS_ADD,
+		Field:  tc.TFS_FIELDS_AREA,
+		From:   nil,
+		Value:  tc.TFS_DIGITAL_SUPPORT_AREA})
+	card_params = append(card_params, tc.TFS_req_struct{
+		Action: tc.TFS_ACTIONS_ADD,
+		Field:  tc.TFS_FIELDS_DESCRIPTION,
+		From:   nil,
+		Value:  card.Body})
+	card_params = append(card_params, tc.TFS_req_struct{
+		Action: tc.TFS_ACTIONS_ADD,
+		Field:  tc.TFS_FIELDS_TAGS,
+		From:   nil,
+		Value:  "BPM"})
+	card_params = append(card_params, tc.TFS_req_struct{
+		Action: tc.TFS_ACTIONS_ADD,
+		Field:  tc.TFS_FIELDS_DUE_DATE,
+		From:   nil,
+		Value:  "05/15/2018"})
+	if len(card.Cards_users) > 0 {
+		if set.Board.Members[`@`+card.Cards_users[0].Username].Tfs_name != "" {
+			temp_tfs_user_name = set.Board.Members[`@`+card.Cards_users[0].Username].Tfs_name
+		}
+		card_params = append(card_params, tc.TFS_req_struct{
+			Action: tc.TFS_ACTIONS_ADD,
+			Field:  tc.TFS_FIELDS_ASSIGNED_TO,
+			From:   nil,
+			Value:  temp_tfs_user_name})
+	}
+	if card.List_id != 417 {
+		switch card.List_id {
+		case 418:
+			temp_state = tc.TFS_STATE_TO_DO
+			temp_substate = tc.TFS_STANDART_SUBSTATUS
+		case 419:
+			temp_state = tc.TFS_STATE_IN_PROGRESS
+			temp_substate = tc.TFS_IN_PROGRESS_SUBSTATUS
+		case 420:
+			temp_state = tc.TFS_STATE_TO_VENDOR
+			temp_substate = tc.TFS_IN_TO_VENDOR_SUBSTATUS
+		case 421:
+			fmt.Println("OS X.")
+		case 422:
+			fmt.Println("OS X.")
+		}
+		card_params = append(card_params, tc.TFS_req_struct{
+			Action: tc.TFS_ACTIONS_ADD,
+			Field:  tc.TFS_FIELDS_STATE,
+			From:   nil,
+			Value:  temp_state})
+		card_params = append(card_params, tc.TFS_req_struct{
+			Action: tc.TFS_ACTIONS_ADD,
+			Field:  tc.TFS_FIELDS_ACTIVATED_BY,
+			From:   nil,
+			Value:  temp_tfs_user_name})
+		card_params = append(card_params, tc.TFS_req_struct{
+			Action: tc.TFS_ACTIONS_ADD,
+			Field:  tc.TFS_FIELDS_SUBSTATUS,
+			From:   nil,
+			Value:  temp_substate})
+	}
+	r, _ := tfs_client.Add_card(card_params)
+	buf := new(bytes.Buffer)
+	buf.ReadFrom(r.Body)
+	s := buf.String()
+
+	fmt.Println(s)
 }
 
 func un_arch_card() {
 	dec = charmap.Windows1251.NewDecoder()
 	toml.DecodeFile(CONFIG_PATH, &set)
 	m := mym.R_api{Debug: DEBUG, U_login: set.Api_data.Api_user.Login, U_pwd: set.Api_data.Api_user.Password, Api_domain: set.Api_data.Restya_api_domain, Board_id: set.Board.Id, Client: &http.Client{}}
-	m.Un_arch_card(418, 4271)
+	m.Un_arch_card(421, 4854)
 }
 
 func check_is_new_cron() (string, bool) {
@@ -466,14 +579,28 @@ func create_card(title string, description string, label string, user_id int) {
 	const JSON_BODY_PTR_ADD_DESCRIPTION string = `{"description": "%s"}`
 	const JSON_BODY_PTR_ADD_MEMBER string = `{"card_id":%s,"user_id":%d}`
 	const JSON_BODY_PTR_ADD_DUE_DATE string = `{"to_date":"%s","due_date":"%s","start":"%s"}`
+	const HYPERLINK_PTR string = `\[Перейти к задаче\]\((.+)\)`
+
+	re := regexp.MustCompile(HYPERLINK_PTR)
 
 	var temp_body string
 	var objmap map[string]*json.RawMessage
 	var buf *bytes.Buffer
+	var tfs_card_params []tc.TFS_req_struct
 
 	temp_body = fmt.Sprintf(JSON_BODY_PTR_ADD_CARD, set.Board.Id, set.Board.Sd_baclog_list_id, title)
 	url := fmt.Sprintf(RESTYA_API_URL_POST_CREATE_CARD, set.Api_data.Restya_api_domain, set.Board.Id, set.Board.Sd_baclog_list_id, token)
 
+	tfs_card_params = append(tfs_card_params, tc.TFS_req_struct{
+		Action: tc.TFS_ACTIONS_ADD,
+		Field:  tc.TFS_FIELDS_AREA,
+		From:   nil,
+		Value:  tc.TFS_DIGITAL_SUPPORT_AREA})
+	tfs_card_params = append(tfs_card_params, tc.TFS_req_struct{
+		Action: tc.TFS_ACTIONS_ADD,
+		Field:  tc.TFS_FIELDS_TITLE,
+		From:   nil,
+		Value:  title})
 	resp, _ := client.Post(url, "application/json", strings.NewReader(temp_body))
 	buf = new(bytes.Buffer)
 	buf.ReadFrom(resp.Body)
@@ -500,6 +627,19 @@ func create_card(title string, description string, label string, user_id int) {
 		for t.Weekday() != time.Friday {
 			t = t.AddDate(0, 0, 1)
 		}
+
+		tfs_card_params = append(tfs_card_params, tc.TFS_req_struct{
+			Action: tc.TFS_ACTIONS_ADD,
+			Field:  tc.TFS_FIELDS_TAGS,
+			From:   nil,
+			Value:  "BPM"})
+
+		tfs_card_params = append(tfs_card_params, tc.TFS_req_struct{
+			Action: tc.TFS_ACTIONS_ADD,
+			Field:  tc.TFS_FIELDS_DUE_DATE,
+			From:   nil,
+			Value:  t.Format("01/02/2006")})
+
 		temp_body = fmt.Sprintf(JSON_BODY_PTR_ADD_DUE_DATE, t.Format("2006-01-02"), t.Format("2006-01-02 15:04"), t.Format("2006-01-02T15:04"))
 		url = fmt.Sprintf(RESTYA_API_URL_PUT_ADD_DUE_DATE, set.Api_data.Restya_api_domain, set.Board.Id, set.Board.Sd_baclog_list_id, card_id, token)
 		req, _ := http.NewRequest("PUT", url, strings.NewReader(temp_body))
@@ -508,6 +648,7 @@ func create_card(title string, description string, label string, user_id int) {
 	}
 
 	if description != "" {
+
 		description = strings.Replace(description, "\r\n", strs.SPACE, -1)
 		description = strings.Replace(description, strs.DOUBLE_QUOTES, strs.QUOTATION, -1)
 		temp_body = fmt.Sprintf(JSON_BODY_PTR_ADD_DESCRIPTION, description)
@@ -516,6 +657,17 @@ func create_card(title string, description string, label string, user_id int) {
 		req.Header.Set("Content-Type", "application/json")
 		fmt.Println(url)
 		client.Do(req)
+
+		if re.MatchString(description) {
+			hyperlink := re.FindAllStringSubmatch(description, -1)[0][1]
+			description = re.ReplaceAllString(description, fmt.Sprintf(tc.TFS_TEXT_PTR_HYPERLINK, hyperlink, hyperlink, "Перейти к задаче"))
+		}
+
+		tfs_card_params = append(tfs_card_params, tc.TFS_req_struct{
+			Action: tc.TFS_ACTIONS_ADD,
+			Field:  tc.TFS_FIELDS_DESCRIPTION,
+			From:   nil,
+			Value:  description})
 	}
 	if user_id != 0 {
 		temp_body = fmt.Sprintf(JSON_BODY_PTR_ADD_MEMBER, card_id, user_id)
@@ -526,6 +678,7 @@ func create_card(title string, description string, label string, user_id int) {
 			fmt.Println(buf.String())
 		}
 	}
+	tfs_client.Add_card(tfs_card_params)
 
 }
 
