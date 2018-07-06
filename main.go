@@ -4,11 +4,13 @@ package main
 import (
 	"bytes"
 	"crypto/md5"
+	"elk_conn/rest_db_conn"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -69,12 +71,39 @@ const (
 )
 
 type settings struct {
-	Ticket_folder_path string   `toml:"ticket_folder_path"`
-	Api_data           api_data `toml:"api_data"`
-	Tfs_data           tfs_data `toml:"tfs_data"`
+	Ticket_folder_path string     `toml:"ticket_folder_path"`
+	Api_data           api_data   `toml:"api_data"`
+	Tfs_data           tfs_data   `toml:"tfs_data"`
+	Slack_data         slack_data `toml:"slack_data"`
+	Restya_db_data     restya_db_data
 	Board              board
 	Test_string        string
 	Path_to_ref        string
+	Our_proxy          string
+}
+
+type restya_db_data struct {
+	Elk_addres    string
+	Db_host       string
+	Db_port       int
+	Db_user       string
+	Db_pwd        string
+	Db_name       string
+	T_user        string
+	T_pwd         string
+	T_local_ip    string
+	T_local_port  int
+	T_server_ip   string
+	T_server_port int
+	T_remote_ip   string
+	T_remote_port int
+}
+
+type slack_data struct {
+	Web_hooks_url             string
+	Sql_ptr_select_user_names string
+	Sql_ptr_select_activeties string
+	Table_title               string
 }
 
 type tfs_data struct {
@@ -220,6 +249,108 @@ func main() {
 	start_cron()
 	//	un_arch_card()
 	//	copy_restya_list()
+	//	_, err := toml.DecodeFile(CONFIG_PATH, &set)
+	//	if err != nil {
+	//		fmt.Println(err.Error())
+	//	}
+
+}
+func send_report_to_slack(msg string) {
+
+	const WEB_HOOKS_CONTENT_TYPE string = "application/json"
+
+	var slack_client *http.Client
+	type body_struct struct {
+		Text string `json:"text"`
+	}
+	body_json := body_struct{Text: msg}
+
+	body_bytes, err_json := json.Marshal(body_json)
+	if err_json != nil {
+		fmt.Println(err_json)
+	}
+	proxyURL, err := url.Parse(set.Our_proxy)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	transport := &http.Transport{
+		Proxy: http.ProxyURL(proxyURL),
+	}
+
+	slack_client = &http.Client{
+		Transport: transport,
+	}
+	slack_client.Post(set.Slack_data.Web_hooks_url, WEB_HOOKS_CONTENT_TYPE, bytes.NewReader(body_bytes))
+}
+
+func list_act_per_usr(users_list_int []int, format_row string) string {
+
+	const (
+		PTR_START_DAY   string = "%s 00:00:00"
+		PTR_END_DAY     string = "%s 23:59:59"
+		PTR_DATE_FORMAT string = "%d-%02d-%02d"
+		START_WORK_WEEK string = ""
+	)
+
+	var users_list []string
+	var names_and_actions map[string]int
+	var temp_name string
+	var temp_act_count int
+	var start_date_str string
+	var end_date_str string
+	var result_table string
+	var end_date time.Time
+	temp_time := time.Now()
+
+	if temp_time.Weekday() == time.Monday {
+		temp_time = temp_time.AddDate(0, 0, -3)
+	} else {
+		temp_time = temp_time.AddDate(0, 0, -1)
+	}
+	end_date = temp_time
+	for temp_time.Weekday() != time.Sunday {
+		temp_time = temp_time.AddDate(0, 0, -1)
+	}
+	start_date_str = fmt.Sprintf(PTR_DATE_FORMAT, temp_time.Year(), temp_time.Month(), temp_time.Day())
+	end_date_str = fmt.Sprintf(PTR_DATE_FORMAT, end_date.Year(), end_date.Month(), end_date.Day())
+	names_and_actions = make(map[string]int)
+	for _, val := range users_list_int {
+		users_list = append(users_list, strconv.Itoa(val))
+	}
+	conn := rest_db_conn.Init(set.Restya_db_data.T_user, set.Restya_db_data.T_pwd, &rest_db_conn.Endpoint{Host: set.Restya_db_data.T_local_ip, Port: set.Restya_db_data.T_local_port}, &rest_db_conn.Endpoint{Host: set.Restya_db_data.T_server_ip, Port: set.Restya_db_data.T_server_port}, &rest_db_conn.Endpoint{Host: set.Restya_db_data.T_remote_ip, Port: set.Restya_db_data.T_remote_port}, set.Restya_db_data.Db_host, set.Restya_db_data.Db_port, set.Restya_db_data.Db_user, set.Restya_db_data.Db_pwd, set.Restya_db_data.Db_name)
+	defer conn.Close_rc()
+	query := fmt.Sprintf(set.Slack_data.Sql_ptr_select_user_names, strings.Join(users_list, ","))
+	name_rows, err := conn.Query(query)
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	for name_rows.Next() {
+		err = name_rows.Scan(&temp_name)
+		if err != nil {
+			fmt.Println(err.Error())
+		} else {
+			names_and_actions[temp_name] = 0
+		}
+
+	}
+	query = fmt.Sprintf(set.Slack_data.Sql_ptr_select_activeties, fmt.Sprintf(PTR_START_DAY, start_date_str), fmt.Sprintf(PTR_END_DAY, end_date_str))
+	name_rows, err = conn.Query(query)
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+	for name_rows.Next() {
+		err = name_rows.Scan(&temp_name, &temp_act_count)
+		if err != nil {
+			fmt.Println(err.Error())
+		}
+		names_and_actions[temp_name] = temp_act_count
+	}
+	result_table = set.Slack_data.Table_title + "\r\n"
+	for name, act_count := range names_and_actions {
+		result_table = result_table + fmt.Sprintf(format_row, name, act_count)
+	}
+	return strings.Trim(result_table, "\r\n")
 }
 
 func copy_restya_list() {
@@ -397,6 +528,13 @@ func test_c(cron_str string) *cron.Cron {
 	return c
 }
 
+func cron_send_report_to_support() {
+	const ROW_TPL string = "Инженер: %s, действия - %d\r\n"
+	users_id := []int{22, 19, 17, 10, 9, 8, 4}
+
+	send_report_to_slack(list_act_per_usr(users_id, ROW_TPL))
+}
+
 func set_cron_func(c *cron.Cron, param []string, cron_time_set string) {
 
 	var command_name string
@@ -426,6 +564,8 @@ func set_cron_func(c *cron.Cron, param []string, cron_time_set string) {
 			cron_arch_list(strings.Split(lists_for_arch, ","), esc_mark)
 		case "create_card":
 			cron_create_card(tpl_name)
+		case "send_report_to_support":
+			cron_send_report_to_support()
 		}
 
 	}); err != nil {
